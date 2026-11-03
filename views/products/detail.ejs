@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= product.ProductName %></title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+  <div class="container py-4" style="max-width: 800px;">
+    <div class="bg-white p-4 shadow-sm rounded">
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <% if (product.PathImage) { %>
+            <img src="<%= product.PathImage %>" class="img-fluid rounded">
+          <% } else { %>
+            <div class="bg-light text-muted d-flex align-items-center justify-content-center rounded" style="height:200px">Chưa có ảnh</div>
+          <% } %>
+        </div>
+        <div class="col-md-8">
+          <h4><%= product.ProductName %></h4>
+          <span class="badge text-bg-secondary mb-3"><%= product.ProductType %></span>
+          <table class="table table-sm">
+            <tr><th style="width:140px">Số lượng</th><td><%= product.Quantity %> <%= product.Unit %></td></tr>
+            <tr><th>Giá</th><td><%= Number(product.Price).toLocaleString('vi-VN') %> đ</td></tr>
+            <tr><th>Mô tả</th><td><%= product.Description || '—' %></td></tr>
+            <tr><th>Ngày tạo</th><td><%= new Date(product.CreateDate).toLocaleString('vi-VN') %></td></tr>
+            <tr><th>Cập nhật</th><td><%= new Date(product.UpdateDate).toLocaleString('vi-VN') %></td></tr>
+            <tr><th>Giá trị tồn kho</th><td><%= (product.Quantity * Number(product.Price)).toLocaleString('vi-VN') %> đ</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="/products/<%= product.ProductID %>/edit" class="btn btn-primary" data-key="U" title="Alt+U">Sửa</a>
+        <a href="/products" class="btn btn-outline-secondary" data-key="B" title="Alt+B">Quay lại danh sách</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/shortcuts.js"></script>
+</body>
+</html>
