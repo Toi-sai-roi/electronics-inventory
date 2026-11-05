@@ -9,6 +9,8 @@ const ExcelJS = require('exceljs');
 
 const router = express.Router();
 const LIMIT = 10;
+const LIMITS = [5, 10, 15, 20, 50];
+
 
 // ---------- Hàm dùng chung ----------
 
@@ -65,23 +67,39 @@ function buildSearch(q) {
 router.get('/', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
+    const mode = req.query.mode === 'fe' ? 'fe' : 'be';
+    let limit = parseInt(req.query.limit);
+    if (!LIMITS.includes(limit)) limit = LIMIT; // chỉ được nhập những cỡ trang có trong mảng LIMITS, sai thì quay về mặc định 10
+
     const { whereSql, params } = buildSearch(q);
-
-    const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const offset = (page - 1) * LIMIT;
-
     const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM Product ${whereSql}`, params);
-    const [products] = await pool.query(
-      `SELECT * FROM Product ${whereSql} ORDER BY ProductID ASC LIMIT ? OFFSET ?`,
-      [...params, LIMIT, offset]
-    );
 
-    const base = '/products?' + (q ? 'q=' + encodeURIComponent(q) + '&' : '');
+    let products;
+    let page = 1;
+
+    if (mode === 'be') {
+      // BE: MySQL cắt trang, chỉ lấy đúng 1 trang
+      page = Math.max(parseInt(req.query.page) || 1, 1);
+      [products] = await pool.query(
+        `SELECT * FROM Product ${whereSql} ORDER BY ProductID ASC LIMIT ? OFFSET ?`,
+        [...params, limit, (page - 1) * limit]
+      );
+    } else {
+      // FE: lấy hết, để JavaScript tự cắt trang
+      [products] = await pool.query(
+        `SELECT * FROM Product ${whereSql} ORDER BY ProductID ASC`,
+        params
+      );
+    }
+
+    // Giữ từ khóa, cỡ trang, kiểu phân trang trong các link đổi trang
+    const qp = { limit, mode };
+    if (q) qp.q = q;
 
     res.render('products/index', {
-      products, q, base,
-      page, limit: LIMIT, total,
-      totalPages: Math.ceil(total / LIMIT),
+      products, q, mode, limit, limits: LIMITS, total, page,
+      totalPages: Math.ceil(total / limit),
+      base: '/products?' + new URLSearchParams(qp).toString() + '&',
     });
   } catch (err) {
     res.status(500).send('Lỗi: ' + err.message);
