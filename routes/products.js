@@ -6,6 +6,7 @@ const upload = require('../middleware/upload');
 const crypto = require('crypto');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
+const { extractProduct } = require('../services/gemini');
 
 const router = express.Router();
 const LIMIT = 10;
@@ -298,6 +299,32 @@ router.post('/import', memUpload.single('file'), async (req, res) => {
     res.render('products/import-result', { ok: 0, errors: [], fatal: err.message });
   }
 });
+
+// Đọc thông tin sản phẩm từ ảnh bằng AI (OCR)
+router.post('/ocr', (req, res) => {
+  memUpload.single('image')(req, res, async (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Ảnh tối đa 5MB' : err.message;
+      return res.status(400).json({ ok: false, error: msg });
+    }
+    if (!req.file) return res.status(400).json({ ok: false, error: 'Chưa chọn ảnh' });
+    if (!/^image\/(jpeg|png|webp)$/.test(req.file.mimetype)) {
+      return res.status(400).json({ ok: false, error: 'Chỉ nhận ảnh JPG, PNG, WEBP' });
+    }
+
+    try {
+      const data = await extractProduct(req.file.buffer, req.file.mimetype);
+      res.json({ ok: true, data });
+    } catch (e) {
+      const busy = /503|UNAVAILABLE|429/.test(e.message);
+      res.status(busy ? 503 : 500).json({
+        ok: false,
+        error: busy ? 'AI đang bận, thử lại sau ít phút' : 'Không đọc được ảnh: ' + e.message,
+      });
+    }
+  });
+});
+
 // Xem chi tiết
 router.get('/:id', async (req, res) => {
   try {

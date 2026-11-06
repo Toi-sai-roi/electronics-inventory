@@ -77,6 +77,9 @@
               </div>
               <% } %>
                 <input type="file" name="image" accept="image/*" class="form-control" id="imageInput">
+                <button type="button" id="ocrBtn" class="btn btn-outline-primary btn-sm mt-2">Đọc thông tin từ ảnh
+                  (AI)</button>
+                <span id="ocrStatus" class="small ms-2"></span>
                 <img id="preview" class="mt-2 rounded" style="display:none; max-height:140px;">
           </div>
 
@@ -97,6 +100,79 @@
   </script>
 
   <script src="/js/shortcuts.js"></script>
+  <script>
+    const ocrBtn = document.getElementById('ocrBtn');
+    const ocrStatus = document.getElementById('ocrStatus');
+    const LABELS = { ProductName: 'Tên', ProductType: 'Loại', Quantity: 'Số lượng', Unit: 'Đơn vị', Price: 'Giá', Description: 'Mô tả' };
+
+    function setStatus(text, cls) {
+      ocrStatus.textContent = text;
+      ocrStatus.className = 'small ms-2 ' + cls;
+    }
+
+    ocrBtn.addEventListener('click', async () => {
+      const file = document.getElementById('imageInput').files[0];
+      if (!file) return setStatus('Hãy chọn ảnh trước.', 'text-danger');
+
+      ocrBtn.disabled = true;
+      setStatus('Đang đọc ảnh...', 'text-muted');
+      try {
+        const fd = new FormData();
+        fd.append('image', file);
+        const res = await fetch('/products/ocr', { method: 'POST', body: fd });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
+
+        const d = json.data;
+        if (!d.IsComponent) {
+          setStatus('Ảnh này không phải linh kiện điện tử (' + d.Reason + '). Hãy chọn ảnh nhãn, bao bì hoặc mạch.', 'text-danger');
+          return;
+        }
+        // Lưu giá trị cũ để hoàn tác
+        const backup = {};
+        Object.keys(LABELS).forEach((n) => (backup[n] = document.querySelector(`[name="${n}"]`).value));
+
+        const filled = [];
+        Object.keys(LABELS).forEach((name) => {
+          const el = document.querySelector(`[name="${name}"]`);
+          if (el && d[name]) {            // có giá trị thì mới điền
+            el.value = d[name];
+            el.classList.add('border-success', 'bg-success-subtle'); // sáng lên cho dễ thấy
+            filled.push(LABELS[name]);
+          }
+        });
+        setTimeout(() => {
+          document.querySelectorAll('.bg-success-subtle').forEach((e) => e.classList.remove('border-success', 'bg-success-subtle'));
+        }, 4000);
+
+        if (filled.length === 0) setStatus('AI không đọc được thông tin nào từ ảnh này. Thử ảnh có chữ in rõ hơn.', 'text-danger');
+        else {
+          const kept = Object.keys(LABELS).filter((n) => !d[n]).map((n) => LABELS[n]);
+          setStatus(
+            'AI đã điền: ' + filled.join(', ') +
+            (kept.length ? '. Giữ nguyên (AI không đọc được): ' + kept.join(', ') : '') +
+            '. Kiểm tra lại trước khi lưu.',
+            'text-success'
+          );
+        }
+        if (filled.length) {
+          const undo = document.createElement('button');
+          undo.type = 'button';
+          undo.className = 'btn btn-link btn-sm p-0 ms-2';
+          undo.textContent = 'Hoàn tác';
+          undo.onclick = () => {
+            Object.keys(backup).forEach((n) => (document.querySelector(`[name="${n}"]`).value = backup[n]));
+            setStatus('Đã hoàn tác về giá trị cũ.', 'text-muted');
+          };
+          ocrStatus.appendChild(undo);
+        }
+      } catch (e) {
+        setStatus(e.message, 'text-danger');
+      } finally {
+        ocrBtn.disabled = false;
+      }
+    });
+  </script>
 </body>
 
 </html>
