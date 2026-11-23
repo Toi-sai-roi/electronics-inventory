@@ -1,3 +1,4 @@
+// services/gemini.js
 const { GoogleGenAI, Type } = require('@google/genai');
 
 const PROMPT = `Đây là ảnh nhãn, bao bì, mạch hoặc hóa đơn của một linh kiện điện tử.
@@ -70,4 +71,4 @@ async function extractProduct(buffer, mimeType) {
     };
 }
 
-module.exports = { extractProduct };
+module.exports = { extractProduct, withRetry };

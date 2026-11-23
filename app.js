@@ -13,7 +13,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Thiết
 
 app.get('/', (req, res) => res.redirect('/products')); // Khi truy cập vào trang chủ, chuyển hướng đến trang /products
 app.use('/products', require('./routes/products')); // Sử dụng router cho các đường dẫn bắt đầu bằng /products, được định nghĩa trong file routes/products.js
-
+app.use('/assistant', require('./routes/assistant')); // Sử dụng router cho các đường dẫn bắt đầu bằng /assistant, được định nghĩa trong file routes/assistant.js
 // Khởi động server và lắng nghe trên cổng được chỉ định trong biến môi trường PORT
 app.listen(process.env.PORT, () => {
   console.log('Server chạy tại http://localhost:' + process.env.PORT);
