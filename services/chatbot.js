@@ -199,8 +199,20 @@ function truncationNote(results, text) {
       extra = Math.max(extra, r.total_matches - r.found);
     }
   });
-  if (!extra || /còn (nữa|thêm)|một phần|chưa hiển thị|bị cắt/i.test(text)) return '';
+  if (!extra) return '';
+  // Nếu bot đã tự nhắc phân trang rồi thì đéo chèn nữa (tránh lặp 2 lần)
+  if (/còn (nữa|thêm)|một phần|chưa hiển thị|bị cắt|trang (tiếp|sau|số|\d)|xem (tiếp|thêm)|trang \d+/i.test(text)) return '';
   return `\n\n(Lưu ý: mỗi lần tra chỉ hiển thị ${MAX_ROWS} dòng đầu, còn ${extra} món nữa. Bạn hỏi cụ thể hơn để xem tiếp.)`;
+}
+
+const KNOWLEDGE_RE = /\b(là (cái )?gì|dùng (làm )?gì|để làm gì|chức năng|công dụng|cần (những )?gì|hoạt động (như )?thế nào)\b/i;
+function lacksExplanation(text, message) {
+  if (!KNOWLEDGE_RE.test(message)) return false;
+  const t = String(text || '').trim();
+
+  const lines = t.split('\n').filter(l => l.trim());
+  const listingOnly = lines.every(l => /^[-•*]/.test(l) || /^\s*$/.test(l));
+  return listingOnly || t.length < 80; // quá ngắn cũng coi như đéo giải thích
 }
 
 // ---------- Hàm chính ----------
@@ -209,10 +221,10 @@ async function askChatbot(message, history = []) {
   const start = Date.now();
 
   const past = (Array.isArray(history) ? history : [])
-    .slice(-6)
+    .slice(-16)
     .map((h) => ({
       role: h?.role === 'model' ? 'model' : 'user',
-      parts: [{ text: String(h?.text || '').slice(0, 1000) }],
+      parts: [{ text: String(h?.text || '').slice(0, 1500) }],
     }));
   while (past.length && past[0].role !== 'user') past.shift();
 
@@ -311,12 +323,15 @@ async function askChatbot(message, history = []) {
     const facts = collectFacts(results, message, calls);
     const badNums = findBadNumbers(text, facts);
     const missing = unverifiedMissing(text, searches);
+    const noExplain = lacksExplanation(text, message);
 
-    if ((badNums.length || missing.length) && repairs < MAX_REPAIRS && !isLast && candidateContent) {
+    if ((badNums.length || missing.length || noExplain) && repairs < MAX_REPAIRS && !isLast && candidateContent) {
       repairs++;
-      console.log('[chatbot] kiểm tra không đạt, số lạ:', badNums, '| chưa tra:', missing);
+      let repairMsg = buildRepair(badNums, missing);
+      if (noExplain) repairMsg += ' Câu hỏi này hỏi khái niệm/công dụng nên phải GIẢI THÍCH trước (2-4 câu), đéo chỉ liệt kê tồn kho.';
+      console.log('[chatbot] kiểm tra không đạt: số lạ', badNums, '| chưa tra', missing, '| thiếu giải thích', noExplain);
       contents.push(candidateContent);
-      contents.push({ role: 'user', parts: [{ text: buildRepair(badNums, missing) }] });
+      contents.push({ role: 'user', parts: [{ text: repairMsg }] });
       continue;
     }
 
@@ -330,6 +345,9 @@ async function askChatbot(message, history = []) {
       reply += `\n\n(Lưu ý: mình chưa tra kho đầy đủ các món: ${missing.join(', ')}.)`;
     }
     reply += truncationNote(results, text);
+    if (noExplain) {
+      reply += '\n\n(Lưu ý: câu hỏi này nên được giải thích kỹ hơn, mình chỉ nêu thông tin tra được.)';
+    }
     return { reply, calls };
   }
 

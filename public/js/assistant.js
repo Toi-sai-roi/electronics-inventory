@@ -48,6 +48,11 @@
     .as-form input { flex: 1; border: 0; padding: 12px; outline: none; }
     .as-form button { border: 0; background: #0f6b4f; color: #fff; padding: 0 16px; cursor: pointer; }
     .as-form button:disabled { opacity: .5; cursor: default; }
+    .as-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-top: 1px solid #dde5e1; }
+    .as-chips button { border: 1px solid #0f6b4f; background: #fff; color: #0f6b4f; border-radius: 999px;
+      padding: 4px 10px; font-size: .8rem; cursor: pointer; }
+    .as-chips button:hover { background: #0f6b4f; color: #fff; }
+    .as-chips[hidden] { display: none; }
   `;
   document.head.appendChild(style);
 
@@ -64,6 +69,11 @@
       <button type="button" class="as-clear" id="as-clear">Xóa chat</button>
     </div>
     <div class="as-msgs" id="as-msgs"></div>
+    <div class="as-chips" id="as-chips">
+      <button type="button" data-q="Tổng cộng kho có bao nhiêu mặt hàng?">Tổng kho</button>
+      <button type="button" data-q="Món nào sắp hết hàng?">Sắp hết</button>
+      <button type="button" data-q="Có sản phẩm nào bất thường không?">Kiểm tra dữ liệu</button>
+    </div>
     <form class="as-form" id="as-form">
       <input id="as-input" placeholder="Hỏi về kho, vd: còn bao nhiêu ESP32?" autocomplete="off">
       <button type="submit">Gửi</button>
@@ -74,8 +84,17 @@
   const form = box.querySelector('#as-form');
   const input = box.querySelector('#as-input');
   const sendBtn = form.querySelector('button');
+  const chips = box.querySelector('#as-chips');
+  chips.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-q]');
+    if (!b) return;
+    input.value = b.dataset.q;
+    form.requestSubmit();
+  });
 
   function add(cls, text) {
+    const c = box.querySelector('#as-chips');
+    if (c) c.hidden = true;
     const d = document.createElement('div');
     d.className = cls;
     d.textContent = text; // textContent: chữ do AI trả về không chạy được như mã web
@@ -103,6 +122,8 @@
     log = [];
     save();
     msgs.innerHTML = '';
+    const c = box.querySelector('#as-chips');
+    if (c) c.hidden = false;
   });
 
   form.addEventListener('submit', async (e) => {

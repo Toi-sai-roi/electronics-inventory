@@ -28,10 +28,11 @@ const declarations = [
         keyword: { type: Type.STRING, description: 'Từ khóa ngắn 1-2 từ, vd "ESP32", "khói", "relay". Bỏ trống nếu chỉ lọc theo loại, giá hoặc số lượng.' },
         type: { type: Type.STRING, description: 'Loại: Vi điều khiển, Cảm biến, Điện trở, Tụ điện, IC, LED, Module, Phụ kiện.' },
         min_price: { type: Type.INTEGER, description: 'Giá tối thiểu (VND).' },
-        max_price: { type: Type.INTEGER, description: 'Giá tối đa (VND, tính cả mốc). "Dưới 30 nghìn" thì dùng 29999.' },
+        max_price: { type: Type.INTEGER, description: 'Giá tối đa (VND, tính cả mốc). "Dưới 30 nghìn" thì dùng 30000.' },
         min_quantity: { type: Type.INTEGER, description: 'Số lượng tồn tối thiểu. "Còn trên 20 cái" thì dùng 21.' },
         max_quantity: { type: Type.INTEGER, description: 'Số lượng tồn tối đa.' },
         sort: { type: Type.STRING, description: 'Một trong: price_asc (rẻ nhất trước), price_desc (đắt nhất trước), quantity_asc, quantity_desc, name.' },
+        page: { type: Type.INTEGER, description: 'Trang kết quả, bắt đầu từ 1. Dùng khi câu trước đã xem trang 1 và người dùng muốn xem tiếp.' },
       },
     },
   },
@@ -87,7 +88,7 @@ const shape = (rows) =>
 
 // Cài đặt thật của từng hàm: chỉ SELECT, giá trị truyền bằng dấu ?
 const impl = {
-  async search_products(args) {
+    async search_products(args) {
     const where = [];
     const params = [];
     String(args.keyword || '').trim().split(/\s+/).filter(Boolean).forEach((w) => {
@@ -106,15 +107,25 @@ const impl = {
     if (maxQ !== undefined) { where.push('Quantity <= ?'); params.push(maxQ); }
 
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
-    const order = SORTS[args.sort] || SORTS.name; // chỉ nhận giá trị trong danh sách cho phép
+    const order = SORTS[args.sort] || SORTS.name;
+    const page = Math.max(parseInt(args.page) || 1, 1);
+    const offset = (page - 1) * MAX_ROWS;
 
     const [[{ n }]] = await pool.query(`SELECT COUNT(*) AS n FROM Product ${whereSql}`, params);
     const [rows] = await pool.query(
-      `SELECT ${COLS} FROM Product ${whereSql} ORDER BY ${order} LIMIT ?`,
-      [...params, MAX_ROWS]
+      `SELECT ${COLS} FROM Product ${whereSql} ORDER BY ${order} LIMIT ? OFFSET ?`,
+      [...params, MAX_ROWS, offset]
     );
-    if (!rows.length) return { found: 0, total_matches: 0, items: [], note: 'Không có sản phẩm nào khớp trong kho.' };
-    return { found: rows.length, total_matches: n, truncated: n > rows.length, items: shape(rows) };
+    if (!rows.length) return { found: 0, total_matches: 0, page, items: [], note: page > 1 ? `Trang ${page} rỗng.` : 'Không có sản phẩm nào khớp trong kho.' };
+    return {
+      found: rows.length,
+      total_matches: n,
+      page,
+      per_page: MAX_ROWS,
+      total_pages: Math.ceil(n / MAX_ROWS),
+      truncated: n > offset + rows.length,
+      items: shape(rows),
+    };
   },
 
   async list_products(args) {
